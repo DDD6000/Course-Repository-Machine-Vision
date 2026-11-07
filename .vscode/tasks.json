@@ -1,0 +1,42 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-opencv",
+            "type": "shell",
+            "command": "cmd.exe",
+            "args": [
+                "/c",
+                "call \"D:\\VS\\VC\\Auxiliary\\Build\\vcvars64.bat\" >nul && cl /nologo /EHsc /std:c++17 /I \"D:\\OpenCV\\opencv\\build\\include\" \"${file}\" /Fe:\"${fileDirname}\\${fileBasenameNoExtension}.exe\" /Fo:\"${fileDirname}\\${fileBasenameNoExtension}.obj\" /link /LIBPATH:\"D:\\OpenCV\\opencv\\build\\x64\\vc16\\lib\" opencv_world4120.lib"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
+        {
+            "label": "run-opencv",
+            "type": "process",
+            "command": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+            "options": {
+                "cwd": "${fileDirname}",
+                "env": {
+                    "PATH": "D:\\OpenCV\\opencv\\build\\x64\\vc16\\bin;${env:PATH}"
+                }
+            },
+            "dependsOn": "build-opencv",
+            "problemMatcher": []
+        }
+    ]
+}

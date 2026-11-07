@@ -1,0 +1,16 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "OpenCV-MSVC-x64",
+            "includePath": [
+                "D:/OpenCV/opencv/build/include",
+                "${workspaceFolder}/**"
+            ],
+            "compilerPath": "D:/VS/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ]
+}

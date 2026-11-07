@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "OpenCV 运行 (MSVC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [
+                {
+                    "name": "PATH",
+                    "value": "D:\\OpenCV\\opencv\\build\\x64\\vc16\\bin;${env:PATH}"
+                }
+            ],
+            "console": "internalConsole",
+            "preLaunchTask": "build-opencv"
+        }
+    ]
+}
