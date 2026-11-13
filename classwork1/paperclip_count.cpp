@@ -19,6 +19,33 @@ static void saveStep(const std::string& outDir, const std::string& name, const c
     std::cout << "[保存] " << path << std::endl;
 }
 
+// 最小外接矩形的长宽比(长边/短边)。
+// 用 minAreaRect 而不是 boundingRect：boundingRect 是水平矩形，物体一转长宽比就变；
+// minAreaRect 会跟着物体一起转，所以长宽比与摆放角度无关，是真正的形状特征。
+static double minRectAspect(const cv::Mat& labels, int id) {
+    cv::Mat mask = (labels == id);  // 0/255 单通道掩膜
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
+    if (contours.empty()) return 0.0;
+
+    // 取面积最大的外轮廓
+    size_t best = 0;
+    double bestArea = -1.0;
+    for (size_t i = 0; i < contours.size(); ++i) {
+        const double a = cv::contourArea(contours[i]);
+        if (a > bestArea) {
+            bestArea = a;
+            best = i;
+        }
+    }
+
+    const cv::RotatedRect rr = cv::minAreaRect(contours[best]);
+    const double longSide = std::max(rr.size.width, rr.size.height);
+    const double shortSide = std::min(rr.size.width, rr.size.height);
+    if (shortSide < 1e-6) return 0.0;
+    return longSide / shortSide;
+}
+
 int main(int argc, char** argv) {
     const std::string imgPath = (argc > 1) ? argv[1] : "origin.png";
 
@@ -79,9 +106,17 @@ int main(int argc, char** argv) {
 
     // ---------- 步骤 6: 过滤 ----------
     // (a) 剔除"贴到图像边框"的连通域：照片暗边框/扫描黑边会被当成一个大目标
-    // (b) 面积过滤：以剩余目标的中位面积自适应定下限，去掉碎屑噪点
+    // (b) 长宽比过滤：回形针是细长形状，最小外接矩形长宽比约 3:1；
+    //     桌面上的污渍、圆点、文字块等接近 1:1 或过于细长的划痕会被剔除
+    // (c) 面积过滤：以剩余目标的中位面积自适应定下限，去掉碎屑噪点
+    const double kMinAspect = 2.0;  // 长宽比下限(比这更方，不是回形针)
+    const double kMaxAspect = 4.5;  // 长宽比上限(比这更细长，是划痕/直线)
+
     std::vector<int> keep;
     std::vector<double> areas;
+    std::vector<double> aspects;
+    int rejectBorder = 0, rejectAspect = 0;
+
     for (int i = 1; i < num; ++i) {
         const int x = stats.at<int>(i, cv::CC_STAT_LEFT);
         const int y = stats.at<int>(i, cv::CC_STAT_TOP);
@@ -90,10 +125,23 @@ int main(int argc, char** argv) {
 
         const bool touchesBorder = (x <= 0) || (y <= 0) ||
                                    (x + w >= gray.cols) || (y + h >= gray.rows);
-        if (touchesBorder) continue;
+        if (touchesBorder) {
+            ++rejectBorder;
+            continue;
+        }
+
+        const double aspect = minRectAspect(labels, i);
+        if (aspect < kMinAspect || aspect > kMaxAspect) {
+            ++rejectAspect;
+            std::cout << "  [剔除] 长宽比 " << cv::format("%.2f", aspect)
+                      << " 不在 [" << kMinAspect << ", " << kMaxAspect << "] 内"
+                      << "  外接框=(" << x << "," << y << "," << w << "," << h << ")" << std::endl;
+            continue;
+        }
 
         keep.push_back(i);
         areas.push_back(static_cast<double>(stats.at<int>(i, cv::CC_STAT_AREA)));
+        aspects.push_back(aspect);
     }
 
     if (keep.empty()) {
@@ -109,9 +157,13 @@ int main(int argc, char** argv) {
     // ---------- 步骤 7: 计数并绘制结果 ----------
     cv::Mat canvas = color.clone();
     int count = 0;
+    int rejectArea = 0;
     for (size_t k = 0; k < keep.size(); ++k) {
         const int i = keep[k];
-        if (areas[k] < minArea) continue;
+        if (areas[k] < minArea) {
+            ++rejectArea;
+            continue;
+        }
 
         ++count;
         const int x = stats.at<int>(i, cv::CC_STAT_LEFT);
@@ -131,6 +183,7 @@ int main(int argc, char** argv) {
                     cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(0, 0, 255), 2);
 
         std::cout << "回形针 #" << count << "  面积=" << static_cast<int>(areas[k])
+                  << "  长宽比=" << cv::format("%.2f", aspects[k])
                   << "  外接框=(" << x << "," << y << "," << w << "," << h << ")"
                   << "  质心=(" << cvRound(cx) << "," << cvRound(cy) << ")" << std::endl;
     }
@@ -141,7 +194,11 @@ int main(int argc, char** argv) {
     saveStep(outDir, "step7_result.png", canvas);
 
     std::cout << "----" << std::endl;
-    std::cout << "Otsu 阈值 = " << otsuTh << "，面积下限 = " << static_cast<int>(minArea) << std::endl;
+    std::cout << "Otsu 阈值 = " << otsuTh
+              << "，长宽比范围 = [" << kMinAspect << ", " << kMaxAspect << "]"
+              << "，面积下限 = " << static_cast<int>(minArea) << std::endl;
+    std::cout << "剔除: 贴边 " << rejectBorder << " 个，长宽比不符 " << rejectAspect
+              << " 个，面积过小 " << rejectArea << " 个" << std::endl;
     std::cout << "回形针总数 = " << count << std::endl;
     return 0;
 }
